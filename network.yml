@@ -191,6 +191,79 @@ Resources:
       Properties:
           RouteTableId: !Ref PrivateRouteTable2
           SubnetId: !Ref PrivateSubnet2
+  WebSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+        GroupDescription: Allow web access to web servers
+        VpcId:
+            Ref: VPC   
+        SecurityGroupIngress:
+        -   IpProtocol: tcp
+            FromPort: 80
+            ToPort: 80
+            CidrIp: 0.0.0.0/0
+        SecurityGroupEgress:
+        -   IpProtocol: tcp
+            FromPort: 0
+            ToPort: 65535
+            CidrIp: 0.0.0.0/0
+  WebAppLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+        UserData:
+            Fn::Base64: 
+                !Sub |
+                    #!/bin/bash
+                    sudo apt-get update -y
+                    sudo apt-get install unzip awscli -y
+                    sudo apt-get install apache2 -y
+                    sudo systemctl start apache2.service
+                    sudo wget -q https://www.dropbox.com/s/6fqwbigha3sbnvx/index.html?dl=0  -O /var/www/html/index.html 
+        ImageId: ami-06d51e91cea0dac8d
+        IamInstanceProfile: arn:aws:iam::313489825355:role/aws-elasticbeanstalk-ec2-role
+        KeyName: DemoKey
+        LaunchConfigurationName: "gi_web_launch_config"
+        SecurityGroups:
+            - Ref: WebSecurityGroup
+        InstanceType: t2.micro
+        BlockDeviceMappings:
+            - DeviceName: "/dev/sda1"
+              Ebs:
+                    VolumeSize: '10'
+  WebAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+        HealthCheckIntervalSeconds: 35
+        HealthCheckPath: /
+        HealthCheckProtocol: HTTP
+        HealthCheckTimeoutSeconds: 30
+        HealthyThresholdCount: 2
+        Port: 80
+        Protocol: HTTP
+        UnhealthyThresholdCount: 5
+        VpcId: 
+            Ref: VPC
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties: 
+        IpAddressType: "ipv4"
+        Name: "WebLoadBalancer"
+        Scheme: "internet-facing"
+        SecurityGroups: 
+            [Ref: WebSecurityGroup]
+        Subnets: 
+            [Ref: PrivateSubnet1, Ref: PrivateSubnet2]
+        Type: "application"
+  myASG: 
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn: LoadBalancer
+    Properties: 
+        AvailabilityZones: 
+         [!Select [ 0, !GetAZs '' ],!Select [ 1, !GetAZs '' ]]
+        LaunchConfigurationName: "gi_web_launch_config"
+        MinSize: "1"
+        MaxSize: "4"
+        LoadBalancerNames: ["WebLoadBalancer"]
 
 Outputs: 
 
