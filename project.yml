@@ -195,3 +195,24 @@ Outputs:
     Value: !Ref VPC
     Export:
       Name: !Sub ${EnvironmentName}-VPCID
+  PublicSubnet1:
+      Description: A reference to the public subnet in the 1st Availability Zone
+      Value: !Ref PublicSubnet1
+      Export:
+        Name: !Sub ${EnvironmentName}-PUB1-SN
+  PublicSubnet2: 
+      Description: A reference to the public subnet in the 2nd Availability Zone
+      Value: !Ref PublicSubnet2
+      Export:
+        Name: !Sub ${EnvironmentName}-PUB2-SN
+  VPCPublicRouteTable:
+      Description: Public Routing
+      Value: !Ref PublicRouteTable
+      Export:
+        Name: !Sub ${EnvironmentName}-PUB-RT
+  LoadBalancerDnsName:
+      Description: Load Balancer Dns Name
+      Value: 
+          Fn::GetAtt: [LoadBalancer,"DNSName"]
+      Export:
+        Name: !Sub ${EnvironmentName}-ELB
