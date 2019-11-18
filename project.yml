@@ -18,6 +18,15 @@ Parameters:
     Description: Please enter the IP range (CIDR notation) for the public subnet in the second Availability Zone
     Type: String
 
+  PrivateSubnet1CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the first Availability Zone
+    Type: String
+
+  PrivateSubnet2CIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet in the second Availability Zone
+    Type: String
+
+
 Resources:
   VPC: 
     Type: AWS::EC2::VPC
@@ -38,6 +47,89 @@ Resources:
     Properties:
       InternetGatewayId: !Ref InternetGateway
       VpcId: !Ref VPC
+  PrivateSubnet1: 
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: !Ref PrivateSubnet1CIDR
+      MapPublicIpOnLaunch: false
+      Tags: 
+        - Key: Name 
+          Value: !Sub ${EnvironmentName} Private Subnet (AZ1)
+
+  PrivateSubnet2: 
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: !Ref PrivateSubnet2CIDR
+      MapPublicIpOnLaunch: false
+      Tags: 
+          - Key: Name 
+            Value: !Sub ${EnvironmentName} Private Subnet (AZ2)
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties: 
+        Domain: vpc
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: InternetGatewayAttachment
+    Properties:
+        Domain: vpc
+  NatGateway1: 
+    Type: AWS::EC2::NatGateway
+    Properties: 
+        AllocationId: !GetAtt NatGateway1EIP.AllocationId
+        SubnetId: !Ref PublicSubnet1
+
+  NatGateway2: 
+    Type: AWS::EC2::NatGateway
+    Properties:
+        AllocationId: !GetAtt NatGateway2EIP.AllocationId
+        SubnetId: !Ref PublicSubnet2
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties: 
+        VpcId: !Ref VPC
+        Tags: 
+            - Key: Name 
+              Value: !Sub ${EnvironmentName} Private Routes (AZ1)
+
+  DefaultPrivateRoute1:
+    Type: AWS::EC2::Route
+    Properties:
+        RouteTableId: !Ref PrivateRouteTable1
+        DestinationCidrBlock: 0.0.0.0/0
+        NatGatewayId: !Ref NatGateway1
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+        RouteTableId: !Ref PrivateRouteTable1
+        SubnetId: !Ref PrivateSubnet1
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties: 
+        VpcId: !Ref VPC
+        Tags: 
+            - Key: Name 
+              Value: !Sub ${EnvironmentName} Private Routes (AZ2)
+
+  DefaultPrivateRoute2:
+    Type: AWS::EC2::Route
+    Properties:
+        RouteTableId: !Ref PrivateRouteTable2
+        DestinationCidrBlock: 0.0.0.0/0
+        NatGatewayId: !Ref NatGateway2
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+        RouteTableId: !Ref PrivateRouteTable2
+        SubnetId: !Ref PrivateSubnet2
   PublicSubnet1: 
     Type: AWS::EC2::Subnet
     Properties:
@@ -150,14 +242,10 @@ Resources:
                       sudo yum -y install httpd
                       sudo apachectl start
                       cd /var/www/html
-                      sudo aws s3 cp s3://geek-inside-1/udacity.zip .
-                      sudo unzip -o udacity.zip
+                      echo "<h1>it works! Udagram, Udacity</h1>" > index.html
       ImageId: ami-0a85857bfc5345c38
-      IamInstanceProfile: udagram-dev-service-role
-      KeyName: DemoKey
       SecurityGroups:  [Ref: WebSecurityGroup]
       InstanceType: "t3.micro"
-      KeyName: DemoKey
       BlockDeviceMappings:
         - DeviceName: "/dev/xvda"
           Ebs:
@@ -172,7 +260,7 @@ Resources:
         Ref: LaunchConfig
       MinSize: "1"
       MaxSize: "4"
-      VPCZoneIdentifier: [!Ref PublicSubnet1,!Ref PublicSubnet2]
+      VPCZoneIdentifier: [!Ref PrivateSubnet1,!Ref PrivateSubnet2]
       TargetGroupARNs: 
         [Ref: LoadBalancerTargetGroup]
       MetricsCollection: 
@@ -205,11 +293,16 @@ Outputs:
       Value: !Ref PublicSubnet2
       Export:
         Name: !Sub ${EnvironmentName}-PUB2-SN
-  VPCPublicRouteTable:
-      Description: Public Routing
-      Value: !Ref PublicRouteTable
+  PrivateSubnet1:
+      Description: A reference to the private subnet in the 1st Availability Zone
+      Value: !Ref PrivateSubnet1
       Export:
-        Name: !Sub ${EnvironmentName}-PUB-RT
+        Name: !Sub ${EnvironmentName}-PRV1-SN
+  PrivateSubnet2: 
+      Description: A reference to the private subnet in the 2nd Availability Zone
+      Value: !Ref PrivateSubnet2
+      Export:
+        Name: !Sub ${EnvironmentName}-PRV2-SN
   LoadBalancerDnsName:
       Description: Load Balancer Dns Name
       Value: 
